@@ -27,3 +27,4 @@ config/*.ini
 .idea/
 *.sublime-project
 *.sublime-workspace
+.mypy_cache

@@ -7,11 +7,9 @@ from .quaternion_cuda import quaternion_conjugate as _quaternion_conjugate_cuda
 from enum import Enum, unique
 
 
-
 Quaternion = torch.Tensor
 DualQuaternions = Tuple[Quaternion, Quaternion]
 QuaternionTranslation = Tuple[Quaternion, torch.Tensor]
-
 
 
 '''
@@ -33,7 +31,7 @@ def quaternion_conjugate(q: Quaternion) -> Quaternion:
     # return _quaternion_conjugate_cuda(q.contiguous().view(-1,4)).view(out_shape)
     if q.is_cuda:
         out_shape = q.shape
-        return _quaternion_conjugate_cuda(q.contiguous().view(-1,4)).view(out_shape)
+        return _quaternion_conjugate_cuda(q.contiguous().view(-1, 4)).view(out_shape)  # type:ignore # nopep8
     else:
         return _quaternion_conjugate_pytorch(q)
 
@@ -53,6 +51,8 @@ def standardize_quaternion(quaternions: Quaternion) -> Quaternion:
     return torch.where(quaternions[..., 0:1] < 0, -quaternions, quaternions)
 
 # @torch.jit.script
+
+
 def _quaternion_mul(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
     """
     Multiply two quaternions.
@@ -73,25 +73,28 @@ def _quaternion_mul(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
     oz = aw * bz + ax * by - ay * bx + az * bw
     return torch.stack((ow, ox, oy, oz), -1)
 
-def _quaternion_4D_mul_3D(a:torch.Tensor, b_xyz:torch.Tensor) -> torch.Tensor:
+
+def _quaternion_4D_mul_3D(a: torch.Tensor, b_xyz: torch.Tensor) -> torch.Tensor:
     aw, ax, ay, az = torch.unbind(a, -1)
     bx, by, bz = torch.unbind(b_xyz, -1)
     ow = - ax * bx - ay * by - az * bz
     ox = aw * bx + ay * bz - az * by
     oy = aw * by - ax * bz + az * bx
     oz = aw * bz + ax * by - ay * bx
-    return torch.stack((ow, ox, oy, oz), -1)  
-
-def _quaternion_3D_mul_4D(a_xyz:torch.Tensor, b:torch.Tensor) -> torch.Tensor:
-    ax, ay, az = torch.unbind(a_xyz, -1)
-    bw, bx, by, bz = torch.unbind(b, -1)
-    ow =  - ax * bx - ay * by - az * bz
-    ox =  ax * bw + ay * bz - az * by
-    oy =  - ax * bz + ay * bw + az * bx
-    oz =  ax * by - ay * bx + az * bw
     return torch.stack((ow, ox, oy, oz), -1)
 
-def _quaternion_mul_pytorch(a: torch.Tensor, b:torch.Tensor):
+
+def _quaternion_3D_mul_4D(a_xyz: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
+    ax, ay, az = torch.unbind(a_xyz, -1)
+    bw, bx, by, bz = torch.unbind(b, -1)
+    ow = - ax * bx - ay * by - az * bz
+    ox = ax * bw + ay * bz - az * by
+    oy = - ax * bz + ay * bw + az * bx
+    oz = ax * by - ay * bx + az * bw
+    return torch.stack((ow, ox, oy, oz), -1)
+
+
+def _quaternion_mul_pytorch(a: torch.Tensor, b: torch.Tensor):
     '''
         native pytorch implementation, only used as a baseline.
     '''
@@ -103,14 +106,12 @@ def _quaternion_mul_pytorch(a: torch.Tensor, b:torch.Tensor):
         return _quaternion_4D_mul_3D(a, b)
     else:
         raise ValueError(f"Invalid input shapes.")
-    
 
-        
 
 def quaternion_mul(a: Quaternion, b: Quaternion) -> Quaternion:
     if a.is_cuda:
         ouput_shape = list(a.shape[:-1]) + [4]
-        return _quaternion_mul_cuda(a.view(-1, a.shape[-1]), b.view(-1, b.shape[-1])).view(ouput_shape)
+        return _quaternion_mul_cuda(a.view(-1, a.shape[-1]), b.view(-1, b.shape[-1])).view(ouput_shape)  # type:ignore # nopep8
     else:
         return _quaternion_mul_pytorch(a, b)
 
@@ -159,7 +160,7 @@ def axis_angle_to_quaternion(axis_angle: torch.Tensor) -> torch.Tensor:
 def quaternion_to_matrix(quaternions: torch.Tensor) -> torch.Tensor:
     """
     Convert rotations given as quaternions to rotation matrices.
-    
+
 
     Args:
         quaternions: quaternions with real part first,
@@ -183,7 +184,7 @@ def quaternion_to_matrix(quaternions: torch.Tensor) -> torch.Tensor:
     o2 = two_s * (ij - kr)
     o3 = two_s * (ik + jr)
     o4 = two_s * (ij + kr)
-    
+
     o5 = 1 - two_s * (ii + kk)
     o6 = two_s * (jk - ir)
     o7 = two_s * (ik - jr)
@@ -194,6 +195,7 @@ def quaternion_to_matrix(quaternions: torch.Tensor) -> torch.Tensor:
         (o1, o2, o3, o4, o5, o6, o7, o8, o9), -1)
 
     return o.view(quaternions.shape[:-1] + (3, 3))
+
 
 def quaternion_apply(quaternion: Quaternion, point: torch.Tensor) -> torch.Tensor:
     """
@@ -213,38 +215,42 @@ def quaternion_apply(quaternion: Quaternion, point: torch.Tensor) -> torch.Tenso
     )
     return out[..., 1:].contiguous()
 
-def quaternion_translation_apply(q:Quaternion, t:torch.Tensor, point:torch.Tensor) -> torch.Tensor:
+
+def quaternion_translation_apply(q: Quaternion, t: torch.Tensor, point: torch.Tensor) -> torch.Tensor:
     p = quaternion_apply(q, point)
     return p + t
-    
-def quaternion_translation_compose(qt1:QuaternionTranslation, qt2:QuaternionTranslation) -> QuaternionTranslation:
+
+
+def quaternion_translation_compose(qt1: QuaternionTranslation, qt2: QuaternionTranslation) -> QuaternionTranslation:
     qr = quaternion_mul(qt1[0], qt2[0])
     t = quaternion_apply(qt1[0], qt2[1]) + qt1[1]
     return (qr, t)
 
-def quaternion_translation_inverse(q:Quaternion, t:torch.Tensor) -> Tuple[Quaternion, torch.Tensor]:
+
+def quaternion_translation_inverse(q: Quaternion, t: torch.Tensor) -> Tuple[Quaternion, torch.Tensor]:
     q_inv = quaternion_conjugate(q)
     t_inv = quaternion_apply(q_inv, -t)
     return q_inv, t_inv
 
+
 def quaternion_translation_to_dual_quaternion(
-        q:torch.Tensor, t:torch.Tensor) -> DualQuaternions:
+        q: torch.Tensor, t: torch.Tensor) -> DualQuaternions:
     '''
     https://cs.gmu.edu/~jmlien/teaching/cs451/uploads/Main/dual-quaternion.pdf
     '''
-    q_d = 0.5* quaternion_mul(t, q)
+    q_d = 0.5 * quaternion_mul(t, q)
     return (q, q_d)
 
 
-def dual_quaternion_to_quaternion_translation(dq:DualQuaternions) -> DualQuaternions:
+def dual_quaternion_to_quaternion_translation(dq: DualQuaternions) -> DualQuaternions:
     q_r = dq[0]
     q_d = dq[1]
     t = 2*quaternion_mul(q_d, quaternion_conjugate(q_r))[..., 1:]
-    
+
     return q_r, t
 
 
-def dual_quaternion_mul(dq1:DualQuaternions, dq2:DualQuaternions) -> DualQuaternions:
+def dual_quaternion_mul(dq1: DualQuaternions, dq2: DualQuaternions) -> DualQuaternions:
     q_r1 = dq1[0]
     q_d1 = dq1[1]
     q_r2 = dq2[0]
@@ -253,7 +259,8 @@ def dual_quaternion_mul(dq1:DualQuaternions, dq2:DualQuaternions) -> DualQuatern
     r_d = quaternion_mul(q_r1, q_d2) + quaternion_mul(q_d1, q_r2)
     return (r_r, r_d)
 
-def dual_quaternion_apply(dq:DualQuaternions, point:torch.Tensor) -> torch.Tensor:
+
+def dual_quaternion_apply(dq: DualQuaternions, point: torch.Tensor) -> torch.Tensor:
     '''
         assuming the input dual quaternion is normalized.
     '''
@@ -261,19 +268,19 @@ def dual_quaternion_apply(dq:DualQuaternions, point:torch.Tensor) -> torch.Tenso
     return quaternion_translation_apply(q, t, point)
 
 
-def dual_quaternion_q_conjugate(dq:DualQuaternions) -> DualQuaternions:
+def dual_quaternion_q_conjugate(dq: DualQuaternions) -> DualQuaternions:
     r = quaternion_conjugate(dq[0])
     d = quaternion_conjugate(dq[1])
     return (r, d)
 
 
-def dual_quaternion_d_conjugate(dq:DualQuaternions) -> DualQuaternions:
+def dual_quaternion_d_conjugate(dq: DualQuaternions) -> DualQuaternions:
     return (dq[0], -dq[1])
 
 
-def dual_quaternion_3rd_conjugate(dq:DualQuaternions) -> DualQuaternions:
+def dual_quaternion_3rd_conjugate(dq: DualQuaternions) -> DualQuaternions:
     return dual_quaternion_d_conjugate(
-         dual_quaternion_q_conjugate(dq) )
+        dual_quaternion_q_conjugate(dq))
 
 
 # def dual_quaternion_inverse(dq:DualQuaternions) -> DualQuaternions:
@@ -281,7 +288,8 @@ def dual_quaternion_3rd_conjugate(dq:DualQuaternions) -> DualQuaternions:
 
 dual_quaternion_inverse = dual_quaternion_q_conjugate
 
-def dual_quaternion_rectify(dq:DualQuaternions) -> DualQuaternions:
+
+def dual_quaternion_rectify(dq: DualQuaternions) -> DualQuaternions:
     '''
         input: (unit quaternion, 4D vector w') -> dual quaternion, which satisfies (r, 0.5* t r)
         solve: min | q - w' | s.t. w^T r = 0
@@ -290,6 +298,7 @@ def dual_quaternion_rectify(dq:DualQuaternions) -> DualQuaternions:
     q_d = q_d - (q_r * q_d).sum(-1, keepdim=True) * q_r
 
     return (q_r, q_d)
+
 
 def _sqrt_positive_part(x: torch.Tensor) -> torch.Tensor:
     """
@@ -336,10 +345,14 @@ def matrix_to_quaternion(matrix: torch.Tensor) -> torch.Tensor:
     # we produce the desired quaternion multiplied by each of r, i, j, k
     quat_by_rijk = torch.stack(
         [
-            torch.stack([q_abs[..., 0] ** 2, m21 - m12, m02 - m20, m10 - m01], dim=-1),
-            torch.stack([m21 - m12, q_abs[..., 1] ** 2, m10 + m01, m02 + m20], dim=-1),
-            torch.stack([m02 - m20, m10 + m01, q_abs[..., 2] ** 2, m12 + m21], dim=-1),
-            torch.stack([m10 - m01, m20 + m02, m21 + m12, q_abs[..., 3] ** 2], dim=-1),
+            torch.stack([q_abs[..., 0] ** 2, m21 - m12,
+                        m02 - m20, m10 - m01], dim=-1),
+            torch.stack([m21 - m12, q_abs[..., 1] ** 2,
+                        m10 + m01, m02 + m20], dim=-1),
+            torch.stack([m02 - m20, m10 + m01, q_abs[..., 2]
+                        ** 2, m12 + m21], dim=-1),
+            torch.stack([m10 - m01, m20 + m02, m21 + m12,
+                        q_abs[..., 3] ** 2], dim=-1),
         ],
         dim=-2,
     )
@@ -353,9 +366,6 @@ def matrix_to_quaternion(matrix: torch.Tensor) -> torch.Tensor:
     # forall i; we pick the best-conditioned one (with the largest denominator)
 
     return quat_candidates[
-        torch.nn.functional.one_hot(q_abs.argmax(dim=-1), num_classes=4) > 0.5, :  # pyre-ignore[16]
+        # pyre-ignore[16]
+        torch.nn.functional.one_hot(q_abs.argmax(dim=-1), num_classes=4) > 0.5, :
     ].reshape(batch_dim + (4,))
-
-
-
-

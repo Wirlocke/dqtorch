@@ -22,15 +22,11 @@ to do:
 
 ## Get Started
 ### Requirments
-tested in Pytorch 1.12, CUDA-11.1, gcc-6.3.0.
-
-To do: check if it compiles with:
-- [ ] Pytorch 2.0
-- [ ] CUDA 11.7
+tested in Pytorch 2.5.1+cu124, CUDA-12.4, gcc-9.2.0
 
 ### Install
 ```
-python setup.py install
+python -m pip install .
 ```
 ### Test
 ```
