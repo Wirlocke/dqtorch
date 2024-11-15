@@ -1,5 +1,9 @@
 import os
+import torch
 from torch.utils.cpp_extension import load
+
+major, minor = torch.cuda.get_device_capability()
+os.environ["TORCH_CUDA_ARCH_LIST"] = f"{major}.{minor}"
 
 _src_path = os.path.dirname(os.path.abspath(__file__))
 
