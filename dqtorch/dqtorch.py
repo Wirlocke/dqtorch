@@ -1,11 +1,8 @@
 import torch
-from typing import Tuple, Optional, Union
+from typing import Tuple
 
 from .quaternion_cuda import quaternion_mul as _quaternion_mul_cuda
 from .quaternion_cuda import quaternion_conjugate as _quaternion_conjugate_cuda
-
-from enum import Enum, unique
-
 
 Quaternion = torch.Tensor
 DualQuaternions = Tuple[Quaternion, Quaternion]
