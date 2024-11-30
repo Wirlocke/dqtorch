@@ -1,60 +1,69 @@
 import os
-from setuptools import setup
+import sys
+from setuptools import setup, find_packages
 from torch.utils.cpp_extension import BuildExtension, CUDAExtension
 
-_src_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'dqtorch')
 
-nvcc_flags = [
-    '-O3', '-std=c++17',
-    '-U__CUDA_NO_HALF_OPERATORS__', '-U__CUDA_NO_HALF_CONVERSIONS__', '-U__CUDA_NO_HALF2_OPERATORS__',
+# Early check for CUDA availability
+try:
+    import torch
+    if not torch.cuda.is_available():
+        print("CUDA is not available. This package requires CUDA.")
+        sys.exit(1)
+except ImportError:
+    print("PyTorch is not installed. Please install it first.")
+    sys.exit(1)
+
+# Get the CUDA architecture for the current GPU
+
+
+def get_cuda_arch():
+    try:
+        import torch
+        major, minor = torch.cuda.get_device_capability()
+        return f'{major}.{minor}'
+    except:
+        return None
+
+
+cuda_arch = get_cuda_arch()
+if cuda_arch:
+    os.environ["TORCH_CUDA_ARCH_LIST"] = cuda_arch
+
+# Define compilation flags
+extra_compile_args = {
+    'cxx': ['-O3', '-std=c++17'] if os.name == "posix" else ['/O2', '/std:c++17'],
+    'nvcc': [
+        '-O3',
+        '-std=c++17',
+        '-U__CUDA_NO_HALF_OPERATORS__',
+        '-U__CUDA_NO_HALF_CONVERSIONS__',
+        '-U__CUDA_NO_HALF2_OPERATORS__',
+    ]
+}
+
+# Define the extension
+ext_modules = [
+    CUDAExtension(
+        name='dqtorch._quaternion_cuda',
+        sources=[
+            'dqtorch/src/quaternion.cu',
+            'dqtorch/src/bindings.cpp',
+        ],
+        extra_compile_args=extra_compile_args,
+    )
 ]
 
-if os.name == "posix":
-    c_flags = ['-O3', '-std=c++17']
-elif os.name == "nt":
-    c_flags = ['/O2', '/std:c++17']
-
-    # find cl.exe
-    def find_cl_path():
-        import glob
-        for edition in ["Enterprise", "Professional", "BuildTools", "Community"]:
-            paths = sorted(glob.glob(
-                r"C:\\Program Files (x86)\\Microsoft Visual Studio\\*\\%s\\VC\\Tools\\MSVC\\*\\bin\\Hostx64\\x64" % edition), reverse=True)
-            if paths:
-                return paths[0]
-
-    # If cl.exe is not on path, try to find it.
-    if os.system("where cl.exe >nul 2>nul") != 0:
-        cl_path = find_cl_path()
-        if cl_path is None:
-            raise RuntimeError(
-                "Could not locate a supported Microsoft Visual C++ installation")
-        os.environ["PATH"] += ";" + cl_path
-
-LIB_NAME = 'dqtorch'
 setup(
-    name=LIB_NAME,  # package name, import this to use python API
-    description='A faster pytorch library for (dual) quaternion batched operations.',
-    license="MIT",
-    author="Chaoyang Wang",
-    python_requires=">=3.6",
-    setup_requires=["torch>=1.12"],
-    install_requires=["torch>=1.12"],
-    packages=[LIB_NAME],
-    ext_modules=[
-        CUDAExtension(
-            name='_quaternion_cuda',  # extension name, import this to use CUDA API
-            sources=[os.path.join(_src_path, 'src', f) for f in [
-                'quaternion.cu',
-                'bindings.cpp',
-            ]],
-            extra_compile_args={
-                'cxx': c_flags,
-                'nvcc': nvcc_flags,
-            }
-        ),
-    ],
+    name='dqtorch',
+    version='0.1.0',
+    packages=find_packages(),
+    ext_modules=ext_modules,
     cmdclass={
         'build_ext': BuildExtension,
-    }
+    },
+    package_data={
+        'dqtorch': ['src/*.cpp', 'src/*.cu', 'src/*.h'],
+    },
+    zip_safe=False,
 )

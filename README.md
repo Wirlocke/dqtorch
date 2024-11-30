@@ -26,8 +26,11 @@ tested in Pytorch 2.5.1+cu124, CUDA-12.4, gcc-9.2.0
 
 ### Install
 ```
-python -m pip install .
+pip install -r requirements.txt
+pip install . --no-build-isolation
 ```
+And make sure that there's no lock file left over in torch_extensions/Cache/py312_cu124/_quaternion_cuda before running a program.
+Signed, several hours of my life
 ### Test
 ```
 python examples.py
